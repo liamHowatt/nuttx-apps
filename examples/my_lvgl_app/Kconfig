@@ -1,0 +1,23 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+menuconfig EXAMPLES_MY_LVGL_APP
+	tristate "My LVGL App"
+	default n
+	depends on GRAPHICS_LVGL
+	---help---
+		Enable my custom LVGL app
+
+if EXAMPLES_MY_LVGL_APP
+
+config EXAMPLES_MY_LVGL_APP_PRIORITY
+	int "my_lvgl_app task priority"
+	default 100
+
+config EXAMPLES_MY_LVGL_APP_STACKSIZE
+	int "my_lvgl_app stack size"
+	default 16384
+
+endif # EXAMPLES_MY_LVGL_APP

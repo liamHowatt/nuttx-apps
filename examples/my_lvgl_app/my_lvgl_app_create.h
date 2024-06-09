@@ -1,0 +1,6 @@
+#ifndef __APPS_EXAMPLES_MY_LVGL_APP_MY_LVGL_APP_CREATE_H
+#define __APPS_EXAMPLES_MY_LVGL_APP_MY_LVGL_APP_CREATE_H
+
+void my_lvgl_app_create(void);
+
+#endif
