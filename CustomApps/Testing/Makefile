@@ -1,0 +1,14 @@
+include $(APPDIR)/Make.defs
+
+# Testing built-in application info
+
+PROGNAME = $(CONFIG_CUSTOM_APPS_TESTING_PROGNAME)
+PRIORITY = $(CONFIG_CUSTOM_APPS_TESTING_PRIORITY)
+STACKSIZE = $(CONFIG_CUSTOM_APPS_TESTING_STACKSIZE)
+MODULE = $(CONFIG_CUSTOM_APPS_TESTING)
+
+# Testing
+
+MAINSRC = Testing.c
+
+include $(APPDIR)/Application.mk
