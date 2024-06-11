@@ -154,7 +154,6 @@ int main(int argc, FAR char *argv[])
     }
 #endif
 
-demo_end:
   lv_disp_remove(result.disp);
   lv_deinit();
 

@@ -27,7 +27,7 @@ MODULE = $(CONFIG_EXAMPLES_MY_LVGL_APP)
 
 # My LVGL app
 
-CSRCS = my_lvgl_app_create.c
+CSRCS = my_lvgl_app_create.c NuttX_Orig.c
 MAINSRC = my_lvgl_app.c
 
 include $(APPDIR)/Application.mk
