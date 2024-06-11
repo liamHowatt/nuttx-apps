@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include "mod.h"
+#include "util.h"
 
 #ifdef NDEBUG
   #error assert is used a lot here. it is recommended to undef NDEBUG
@@ -23,6 +24,7 @@ struct all {
   struct mod mod;
   struct ctx ctx;
   struct mod_command command;
+  Request requests[12];
 };
 
 static void gpio_write(void *ctx, enum mod_Gpio pin, bool value) {
@@ -46,7 +48,10 @@ static bool gpio_read(void *ctx, enum mod_Gpio pin) {
   return read_v;
 }
 static bool check_and_set_bootstrap(void *ctx) {
-  return true;
+  static bool boostrapped;
+  bool ret = !boostrapped;
+  boostrapped = true;
+  return ret;
 }
 static void report_command_is_complete(void *ctx) {
 }
@@ -89,36 +94,111 @@ static const struct mod_platform_interface interface = {
   .unreachable=                 unreachable,
 };
 
+static uint8_t decode_pin_id(const char *s) {
+  if (
+    strlen(s) != 2
+    || s[0] < 'A'
+    || s[0] > 'L'
+    || s[1] < '0'
+    || s[1] > '3'
+  ) {
+    return 255;
+  }
+  int slot = s[0] - 'A';
+  int pin = s[1] - '0';
+  return slot * 4 + pin;
+}
+
 int mcp_main(int argc, char *argv[])
 {
-  puts("This is the MCP app");
+  int returncode = 1;
+  static struct all all;
 
-  struct all *all = malloc(sizeof(struct all));
-  assert(all);
+  if(argc < 2) {
+    goto out;
+  }
+
+  if (strcmp(argv[1], "declare") == 0) {
+    if (argc != 3 || strlen(argv[2]) > DECLARATION_LEN) {
+      goto out;
+    }
+    all.command.command = CommandDeclare;
+    strncpy(all.command.u.declare.declaration, argv[2], DECLARATION_LEN);
+  }
+  else if (strcmp(argv[1], "request") == 0) {
+    if (argc != 2) {
+      goto out;
+    }
+    all.command.command = CommandRequest;
+    all.command.u.request.requests_dst = all.requests;
+  }
+  else if (strcmp(argv[1], "route") == 0) {
+    all.command.command = CommandRoute;
+    if (argc < 3) {
+      goto out;
+    }
+    all.command.u.route.route_request.input_pin = 254;
+    all.command.u.route.route_request.output_pin = 254;
+    if (strcmp(argv[2], "set") == 0) {
+      all.command.u.route.route_request.op = RouteOpSetOne;
+      if (argc != 4) {
+        goto out;
+      }
+      all.command.u.route.route_request.output_pin = decode_pin_id(argv[3]);
+    }
+    else if (strcmp(argv[2], "clear") == 0) {
+      all.command.u.route.route_request.op = RouteOpClearOne;
+      if (argc != 4) {
+        goto out;
+      }
+      all.command.u.route.route_request.output_pin = decode_pin_id(argv[3]);
+    }
+    else if (strcmp(argv[2], "route") == 0) {
+      all.command.u.route.route_request.op = RouteOpRouteIo;
+      if (argc != 5) {
+        goto out;
+      }
+      all.command.u.route.route_request.input_pin = decode_pin_id(argv[3]);
+      all.command.u.route.route_request.output_pin = decode_pin_id(argv[4]);
+    }
+    // else if (strcmp(argv[2], "unroute") == 0) {
+    //   all.command.u.route.route_request.op = RouteOpUnrouteIo;
+    // }
+    else {
+      goto out;
+    }
+    if (
+      all.command.u.route.route_request.input_pin == 255
+      || all.command.u.route.route_request.output_pin == 255
+    ) {
+      goto out;
+    }
+  }
+  else {
+    goto out;
+  }
 
   int fd_clk = open("/dev/mcp0_clk", O_RDWR);
   assert(fd_clk != -1);
   int fd_dat = open("/dev/mcp0_dat", O_RDWR);
   assert(fd_dat != -1);
 
-  all->ctx.pin_fds[0] = fd_clk;
-  all->ctx.pin_fds[1] = fd_dat;
-  all->ctx.command = NULL;
+  all.ctx.pin_fds[0] = fd_clk;
+  all.ctx.pin_fds[1] = fd_dat;
+  all.ctx.command = NULL;
+  all.ctx.delay_has_elapsed = false;
 
-  mod_init(&all->mod, &interface, &all->ctx);
+  mod_init(&all.mod, &interface, &all.ctx);
 
-  all->command.command = CommandDeclare;
-  strncpy(all->command.u.declare.declaration, "NuttX ESP32-S3", DECLARATION_LEN);
-
-  all->ctx.command = &all->command;
+  all.ctx.command = &all.command;
   while (1) {
-    mod_update(&all->mod);
+    mod_update(&all.mod);
 
-    int blocked_by = mod_blocked_by(&all->mod);
+    int blocked_by = mod_blocked_by(&all.mod);
     switch (blocked_by) {
       case mod_ModBlockOnDelay:
         usleep(MOD_BASE_PIN_HALF_CLK_PERIOD_US);
-        all->ctx.delay_has_elapsed = true;
+        all.ctx.delay_has_elapsed = true;
         break;
       case mod_ModBlockOnNeedClkHigh:
         usleep(MOD_BASE_PIN_HALF_CLK_PERIOD_US);
@@ -133,13 +213,36 @@ int mcp_main(int argc, char *argv[])
     }
   }
 
-  printf(
-    "location: %d, is hor: %d\n",
-    (int) all->command.u.declare.location_response.location,
-    (int) all->command.u.declare.location_response.is_horizontal
-  );
+  if (all.command.command == CommandDeclare) {
+    printf(
+      "%d %d\n",
+      (int) all.command.u.declare.location_response.location,
+      (int) all.command.u.declare.location_response.is_horizontal
+    );
+  }
+  else if (all.command.command == CommandRequest) {
+    for (int i=0; i<all.command.u.request.n_requests_result; i++) {
+      assert(memchr(all.requests[i].declaration, '\n', DECLARATION_LEN) == NULL);
+      printf(
+        "%d %d %." STRINGIFY(DECLARATION_LEN) "s\n",
+        (int) all.requests[i].location,
+        (int) all.requests[i].is_horizontal,
+        all.requests[i].declaration
+      );
+    }
+  }
+  else if (all.command.command == CommandRoute) {
+  }
+  else {
+    assert(0);
+  }
 
-  free(all);
-  puts("done");
-  return 0;
+  int res = close(fd_clk);
+  assert(res == 0);
+  res = close(fd_dat);
+  assert(res == 0);
+
+  returncode = 0;
+out:
+  return returncode;
 }
