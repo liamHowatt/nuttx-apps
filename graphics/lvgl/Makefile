@@ -35,12 +35,12 @@ endif
 
 WD := ${shell echo $(CURDIR) | sed -e 's/ /\\ /g'}
 
-CONFIG_GRAPH_LVGL_URL ?= "https://github.com/lvgl/lvgl/archive/refs/tags"
+CONFIG_GRAPH_LVGL_URL ?= "https://github.com/lvgl/lvgl/archive"
 
 LVGL_PATCHS ?= $(sort $(wildcard 000*.patch))
 
-LVGL_VERSION = 9.1.0
-LVGL_TARBALL = v$(LVGL_VERSION).zip
+LVGL_VERSION = 48ce05d71e782eb149a3ea41e05cb64f6270ffa7
+LVGL_TARBALL = $(LVGL_VERSION).zip
 
 LVGL_UNPACKNAME = lvgl
 UNPACK ?= unzip -o $(if $(V),,-q)
