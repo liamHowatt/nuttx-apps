@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_CUSTOM_APPS_LVGL_APP),)
+CONFIGURED_APPS += $(APPDIR)/CustomApps/LvglApp
+endif
