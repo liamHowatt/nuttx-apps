@@ -15,7 +15,7 @@ if CRYPTO_WOLFSSL
 
 config WOLFSSL_VERSION
 	string "wolfSSL Version"
-	default "5.5.4"
+	default "v5.7.2-stable"
 
 menuconfig WOLFCRYPT_APPS
 	tristate "wolfCrypt applications"
