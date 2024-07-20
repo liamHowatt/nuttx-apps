@@ -60,13 +60,24 @@ static void https_connect(https_connect_ret_t * ret, const char * domain)
     int intret;
 
     // ssl initialization.
-    wolfSSL_library_init();
+    if(wolfSSL_Init() != SSL_SUCCESS)
+    {
+        ret->err = "wolfSSL_Init() error";
+        return;
+    }
 
     //init context
     WOLFSSL_CTX *ctx = wolfSSL_CTX_new(wolfTLS_client_method());
     if (!ctx)
     {
         ret->err = "cannot create SSL context";
+        return;
+    }
+
+    /* Load client certificates into WOLFSSL_CTX */
+    if ((intret = wolfSSL_CTX_load_verify_buffer_ex(ctx, ca_cert_der_2048,
+            sizeof_ca_cert_der_2048, SSL_FILETYPE_PEM, 0, WOLFSSL_LOAD_FLAG_DATE_ERR_OKAY)) != WOLFSSL_SUCCESS) {
+        printf("ERROR: failed to load CA cert. %d\n", intret);
         return;
     }
 
@@ -122,14 +133,18 @@ static void https_connect(https_connect_ret_t * ret, const char * domain)
     //     return;
     // }
 
-    if (wolfSSL_set_fd(ssl, socket_fd) != 0)
+    if (wolfSSL_set_fd(ssl, socket_fd) != SSL_SUCCESS)
     {
         ret->err = "SSL_set_fd() failed";
         return;
     }
 
-    if (wolfSSL_connect(ssl) == -1)
+    if ((intret = wolfSSL_connect(ssl)) != SSL_SUCCESS)
     {
+        int err = wolfSSL_get_error(ssl, intret);
+        char buf[100] = {0};
+        wolfSSL_ERR_error_string_n(err, buf, 99);
+        printf("%s\n", buf);
         ret->err = "SSL_connect() failed";
         return;
     }
