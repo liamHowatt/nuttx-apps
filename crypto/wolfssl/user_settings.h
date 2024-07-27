@@ -29,7 +29,7 @@
 #define WOLFSSL_BENCHMARK_FIXED_UNITS_MB
 
 /* Development */
-/*#define DEBUG_WOLFSSL*/
+#define DEBUG_WOLFSSL
 
 #define HAVE_TLS_EXTENSIONS
 #define HAVE_SUPPORTED_CURVES
@@ -51,3 +51,6 @@
 #define HAVE_CHACHA
 #define HAVE_ENCRYPT_THEN_MAC
 #define NO_OLD_TLS
+#define SESSION_CERTS
+#define HAVE_SNI
+#define SP_INT_BITS     8192
