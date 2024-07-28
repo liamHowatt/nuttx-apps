@@ -11,5 +11,10 @@ MODULE = $(CONFIG_CUSTOM_APPS_MCP)
 
 MAINSRC = Mcp.c
 CSRCS   = mcp_core/module/mod.c mcp_core/common/types/types.c mcp_core/common/serialize/ser.c
+CFLAGS += -Imcp_core/module
+CFLAGS += -Imcp_core/common/mcpasync
+CFLAGS += -Imcp_core/common/serialize
+CFLAGS += -Imcp_core/common/types
+CFLAGS += -Imcp_core/common/util
 
 include $(APPDIR)/Application.mk
