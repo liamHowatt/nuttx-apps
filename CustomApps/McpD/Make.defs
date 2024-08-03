@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_CUSTOM_APPS_MCPD),)
+CONFIGURED_APPS += $(APPDIR)/CustomApps/McpD
+endif

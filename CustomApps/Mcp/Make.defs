@@ -1,3 +1,8 @@
 ifneq ($(CONFIG_CUSTOM_APPS_MCP),)
 CONFIGURED_APPS += $(APPDIR)/CustomApps/Mcp
+
+CFLAGS += ${INCDIR_PREFIX}${APPDIR}/CustomApps/Mcp
+
+CXXFLAGS += ${INCDIR_PREFIX}${APPDIR}/CustomApps/Mcp
+
 endif
