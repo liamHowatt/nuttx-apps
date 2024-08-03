@@ -45,7 +45,7 @@ int main(int argc, FAR char *argv[])
 
   printf("Termios example\n");
 
-  fd = open("/dev/ttyS0", O_RDONLY);
+  fd = open("/dev/ttyS1", O_RDONLY);
   if (fd < 0)
     {
       error = errno;
@@ -67,7 +67,7 @@ int main(int argc, FAR char *argv[])
    * by cfsetspeed.
    */
 
-  ret = cfsetspeed(&tio, B57600);
+  ret = cfsetspeed(&tio, B115200);
   if (ret < 0)
     {
       error = errno;
@@ -76,16 +76,16 @@ int main(int argc, FAR char *argv[])
 
   /* Configure 2 stop bits. */
 
-  tio.c_cflag |= CSTOPB;
+  tio.c_cflag &= ~CSTOPB;
 
   /* Enable parity and configure odd parity. */
 
-  tio.c_cflag |= PARENB | PARODD;
+  tio.c_cflag &= ~(PARENB | PARODD);
 
   /* Change the data size to 7 bits */
 
   tio.c_cflag &= ~CSIZE; /* Clean the bits */
-  tio.c_cflag |= CS7;    /* 7 bits */
+  tio.c_cflag |= CS8;    /* 7 bits */
 
 #ifdef CONFIG_EXAMPLES_TERMIOS_DIS_HW_FC
 
@@ -110,7 +110,7 @@ int main(int argc, FAR char *argv[])
    * before the hardware buffer gets empty. A small delay is enough.
    */
 
-  sleep(1);
+  // sleep(1);
 
   /* Change the attributes now. */
 
@@ -129,12 +129,12 @@ int main(int argc, FAR char *argv[])
    * attributes to see if they took effect;
    */
 
-  while (1)
-    {
-      printf("If you can read this message, the changes took effect.\n"
-            "Expected error code: 0. Current code: %d\n", error);
-      sleep(1);
-    }
+  // while (1)
+  //   {
+  //     printf("If you can read this message, the changes took effect.\n"
+  //           "Expected error code: 0. Current code: %d\n", error);
+  //     sleep(1);
+  //   }
 
   return 0;
 }

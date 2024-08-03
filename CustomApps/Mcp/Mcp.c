@@ -6,25 +6,29 @@
 #include <nuttx/ioexpander/gpio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <nuttx/timers/timer.h>
 
 #include "mod.h"
 #include "util.h"
+
+#include "mcp.h"
 
 #ifdef NDEBUG
   #error assert is used a lot here. it is recommended to undef NDEBUG
 #endif
 
+#if MCP_DECLARATION_LEN != DECLARATION_LEN
+  #error MCP_DECLARATION_LEN should be equal to DECLARATION_LEN
+#endif
+
+#define TIM_SIGNO SIGUSR1
+
 struct ctx {
   int pin_fds[2];
   struct mod_command *command;
   bool delay_has_elapsed;
-};
-
-struct all {
-  struct mod mod;
-  struct ctx ctx;
-  struct mod_command command;
-  Request requests[12];
+  uint8_t slot_idx;
 };
 
 static void gpio_write(void *ctx, enum mod_Gpio pin, bool value) {
@@ -48,9 +52,11 @@ static bool gpio_read(void *ctx, enum mod_Gpio pin) {
   return read_v;
 }
 static bool check_and_set_bootstrap(void *ctx) {
-  static bool boostrapped;
-  bool ret = !boostrapped;
-  boostrapped = true;
+  struct ctx *ctx2 = ctx;
+
+  static bool boostrapped[2];
+  bool ret = !boostrapped[ctx2->slot_idx];
+  boostrapped[ctx2->slot_idx] = true;
   return ret;
 }
 static void report_command_is_complete(void *ctx) {
@@ -94,7 +100,7 @@ static const struct mod_platform_interface interface = {
   .unreachable=                 unreachable,
 };
 
-static uint8_t decode_pin_id(const char *s) {
+static void decode_pin_id(const char *s, uint8_t *mod, uint8_t *pin) {
   if (
     strlen(s) != 2
     || s[0] < 'A'
@@ -102,106 +108,86 @@ static uint8_t decode_pin_id(const char *s) {
     || s[1] < '0'
     || s[1] > '3'
   ) {
-    return 255;
+    return;
   }
-  int slot = s[0] - 'A';
-  int pin = s[1] - '0';
-  return slot * 4 + pin;
+  *mod = s[0] - 'A';
+  *pin = s[1] - '0';
 }
 
-int mcp_main(int argc, char *argv[])
+static struct mod_command g_command;
+
+mcp_request_s mcp_g_requests[MCP_MAX_REQUESTS];
+
+static void send_command(uint8_t idx)
 {
-  int returncode = 1;
-  static struct all all;
+  int res;
+  static struct {
+    struct mod mod;
+    struct ctx ctx;
+  } all;
 
-  if(argc < 2) {
-    goto out;
-  }
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, TIM_SIGNO);
+  res = sigprocmask(SIG_BLOCK, &set, NULL);
+  assert(res == 0);
+  int tim_fd = open("/dev/timer0", O_RDONLY);
+  assert(tim_fd != -1);
+  res = ioctl(tim_fd, TCIOC_SETTIMEOUT, MOD_BASE_PIN_HALF_CLK_PERIOD_US);
+  assert(res == 0);
+  struct timer_notify_s notify;
+  notify.pid      = getpid();
+  notify.periodic = false;
+  notify.event.sigev_notify = SIGEV_SIGNAL;
+  notify.event.sigev_signo  = TIM_SIGNO;
+  notify.event.sigev_value.sival_ptr = NULL;
+  // res = ioctl(tim_fd, TCIOC_NOTIFICATION, (unsigned long)((uintptr_t)&notify));
+  // assert(res == 0);
 
-  if (strcmp(argv[1], "declare") == 0) {
-    if (argc != 3 || strlen(argv[2]) > DECLARATION_LEN) {
-      goto out;
-    }
-    all.command.command = CommandDeclare;
-    strncpy(all.command.u.declare.declaration, argv[2], DECLARATION_LEN);
-  }
-  else if (strcmp(argv[1], "request") == 0) {
-    if (argc != 2) {
-      goto out;
-    }
-    all.command.command = CommandRequest;
-    all.command.u.request.requests_dst = all.requests;
-  }
-  else if (strcmp(argv[1], "route") == 0) {
-    all.command.command = CommandRoute;
-    if (argc < 3) {
-      goto out;
-    }
-    all.command.u.route.route_request.input_pin = 254;
-    all.command.u.route.route_request.output_pin = 254;
-    if (strcmp(argv[2], "set") == 0) {
-      all.command.u.route.route_request.op = RouteOpSetOne;
-      if (argc != 4) {
-        goto out;
-      }
-      all.command.u.route.route_request.output_pin = decode_pin_id(argv[3]);
-    }
-    else if (strcmp(argv[2], "clear") == 0) {
-      all.command.u.route.route_request.op = RouteOpClearOne;
-      if (argc != 4) {
-        goto out;
-      }
-      all.command.u.route.route_request.output_pin = decode_pin_id(argv[3]);
-    }
-    else if (strcmp(argv[2], "route") == 0) {
-      all.command.u.route.route_request.op = RouteOpRouteIo;
-      if (argc != 5) {
-        goto out;
-      }
-      all.command.u.route.route_request.input_pin = decode_pin_id(argv[3]);
-      all.command.u.route.route_request.output_pin = decode_pin_id(argv[4]);
-    }
-    // else if (strcmp(argv[2], "unroute") == 0) {
-    //   all.command.u.route.route_request.op = RouteOpUnrouteIo;
-    // }
-    else {
-      goto out;
-    }
-    if (
-      all.command.u.route.route_request.input_pin == 255
-      || all.command.u.route.route_request.output_pin == 255
-    ) {
-      goto out;
-    }
-  }
-  else {
-    goto out;
-  }
-
-  int fd_clk = open("/dev/mcp0_clk", O_RDWR);
+  char fname_buf[14];
+  snprintf(fname_buf, sizeof(fname_buf), "/dev/mcp%c_clk", idx + '0');
+  int fd_clk = open(fname_buf, O_RDWR);
   assert(fd_clk != -1);
-  int fd_dat = open("/dev/mcp0_dat", O_RDWR);
+  snprintf(fname_buf, sizeof(fname_buf), "/dev/mcp%c_dat", idx + '0');
+  int fd_dat = open(fname_buf, O_RDWR);
   assert(fd_dat != -1);
 
   all.ctx.pin_fds[0] = fd_clk;
   all.ctx.pin_fds[1] = fd_dat;
   all.ctx.command = NULL;
   all.ctx.delay_has_elapsed = false;
+  all.ctx.slot_idx = idx;
 
   mod_init(&all.mod, &interface, &all.ctx);
 
-  all.ctx.command = &all.command;
+  all.ctx.command = &g_command;
   while (1) {
     mod_update(&all.mod);
 
     int blocked_by = mod_blocked_by(&all.mod);
     switch (blocked_by) {
       case mod_ModBlockOnDelay:
-        usleep(MOD_BASE_PIN_HALF_CLK_PERIOD_US);
+        // puts("1");
+        res = ioctl(tim_fd, TCIOC_NOTIFICATION, (unsigned long)((uintptr_t)&notify));
+        assert(res == 0);
+        res = ioctl(tim_fd, TCIOC_START, 0);
+        assert(res == 0);
+        res = sigwaitinfo(&set, NULL);
+        assert(res != -1);
+        // puts("2");
+
         all.ctx.delay_has_elapsed = true;
         break;
       case mod_ModBlockOnNeedClkHigh:
-        usleep(MOD_BASE_PIN_HALF_CLK_PERIOD_US);
+        // puts("3");
+        res = ioctl(tim_fd, TCIOC_NOTIFICATION, (unsigned long)((uintptr_t)&notify));
+        assert(res == 0);
+        res = ioctl(tim_fd, TCIOC_START, 0);
+        assert(res == 0);
+        res = sigwaitinfo(&set, NULL);
+        assert(res != -1);
+        // puts("4");
+
         break;
       case mod_ModBlockOnNeedCommand:
         break;
@@ -213,36 +199,150 @@ int mcp_main(int argc, char *argv[])
     }
   }
 
-  if (all.command.command == CommandDeclare) {
-    printf(
-      "%d %d\n",
-      (int) all.command.u.declare.location_response.location,
-      (int) all.command.u.declare.location_response.is_horizontal
-    );
-  }
-  else if (all.command.command == CommandRequest) {
-    for (int i=0; i<all.command.u.request.n_requests_result; i++) {
-      assert(memchr(all.requests[i].declaration, '\n', DECLARATION_LEN) == NULL);
-      printf(
-        "%d %d %." STRINGIFY(DECLARATION_LEN) "s\n",
-        (int) all.requests[i].location,
-        (int) all.requests[i].is_horizontal,
-        all.requests[i].declaration
-      );
-    }
-  }
-  else if (all.command.command == CommandRoute) {
-  }
-  else {
-    assert(0);
-  }
-
-  int res = close(fd_clk);
+  res = close(fd_clk);
   assert(res == 0);
   res = close(fd_dat);
   assert(res == 0);
+  res = close(tim_fd);
+  assert(res == 0);
+}
 
-  returncode = 0;
-out:
-  return returncode;
+void mcp_declare(uint8_t idx, const char * declaration, uint8_t *location, bool *is_horizontal)
+{
+  g_command.command = CommandDeclare;
+  strncpy(g_command.u.declare.declaration, declaration, DECLARATION_LEN);
+  send_command(idx);
+  *location = g_command.u.declare.location_response.location;
+  *is_horizontal = g_command.u.declare.location_response.is_horizontal;
+}
+
+int mcp_request(uint8_t idx)
+{
+  static Request requests[MCP_MAX_REQUESTS];
+  g_command.command = CommandRequest;
+  g_command.u.request.requests_dst = requests;
+  send_command(idx);
+  for (int i=0; i<g_command.u.request.n_requests_result; i++) {
+    mcp_g_requests[i].location = requests[i].location;
+    mcp_g_requests[i].is_horizontal = requests[i].is_horizontal;
+    strncpy(mcp_g_requests[i].declaration, requests[i].declaration, DECLARATION_LEN);
+  }
+  return g_command.u.request.n_requests_result;
+}
+
+void mcp_route(uint8_t idx, mcp_route_e op, uint8_t in_mod, uint8_t in_pin, uint8_t out_mod, uint8_t out_pin)
+{
+  if(op == MCP_ROUTE_E_SET) {
+    g_command.u.route.route_request.op = RouteOpSetOne;
+  } else if(op == MCP_ROUTE_E_CLEAR) {
+    g_command.u.route.route_request.op = RouteOpClearOne;
+  } else if(op == MCP_ROUTE_E_ROUTE) {
+    g_command.u.route.route_request.op = RouteOpRouteIo;
+  } else {
+    return;
+  }
+  g_command.command = CommandRoute;
+  g_command.u.route.route_request.input_pin = in_mod * 4 + in_pin;
+  g_command.u.route.route_request.output_pin = out_mod * 4 + out_pin;
+  send_command(idx);
+}
+
+void mcp_memory(uint8_t idx, bool is_read, uint8_t mod_n, uint8_t offset, uint8_t length, uint8_t *srcdst)
+{
+  g_command.command = CommandMemory;
+  g_command.u.memory.memory_request.is_read = is_read;
+  g_command.u.memory.memory_request.mod_n = mod_n;
+  g_command.u.memory.memory_request.offset = offset;
+  g_command.u.memory.memory_request.length = length;
+  g_command.u.memory.mem_srcdst = srcdst;
+  send_command(idx);
+}
+
+int mcp_main(int argc, char **argv)
+{
+  if(argc < 3) {
+    return 1;
+  }
+
+  if(!((argv[1][0] == '0' || argv[1][0] == '1') && argv[1][1] == '\0')) {
+    return 1;
+  }
+  uint8_t idx = argv[1][0] - '0';
+
+  argc--;
+  argv++;
+
+  if (strcmp(argv[1], "declare") == 0) {
+    if (argc != 3 || strlen(argv[2]) > DECLARATION_LEN) {
+      return 1;
+    }
+    uint8_t location;
+    bool is_horizontal;
+    mcp_declare(idx, argv[2], &location, &is_horizontal);
+    printf("%d %d\n", (int) location, (int) is_horizontal);
+  }
+  else if (strcmp(argv[1], "request") == 0) {
+    if (argc != 2) {
+      return 1;
+    }
+    int n_result = mcp_request(idx);
+    for (int i=0; i<n_result; i++) {
+      printf(
+        "%d %d %." STRINGIFY(DECLARATION_LEN) "s\n",
+        (int) mcp_g_requests[i].location,
+        (int) mcp_g_requests[i].is_horizontal,
+        mcp_g_requests[i].declaration
+      );
+    }
+  }
+  else if (strcmp(argv[1], "route") == 0) {
+    if (argc < 3) {
+      return 1;
+    }
+    uint8_t mod_in = 255;
+    uint8_t pin_in = 255;
+    uint8_t mod_out = 255;
+    uint8_t pin_out = 255;
+    mcp_route_e op;
+    if (strcmp(argv[2], "set") == 0) {
+      if (argc != 4) {
+        return 1;
+      }
+      op = MCP_ROUTE_E_SET;
+      mod_in = 0;
+      pin_in = 0;
+      decode_pin_id(argv[3], &mod_out, &pin_out);
+    }
+    else if (strcmp(argv[2], "clear") == 0) {
+      if (argc != 4) {
+        return 1;
+      }
+      op = MCP_ROUTE_E_CLEAR;
+      mod_in = 0;
+      pin_in = 0;
+      decode_pin_id(argv[3], &mod_out, &pin_out);
+    }
+    else if (strcmp(argv[2], "route") == 0) {
+      if (argc != 5) {
+        return 1;
+      }
+      op = MCP_ROUTE_E_ROUTE;
+      decode_pin_id(argv[3], &mod_in, &pin_in);
+      decode_pin_id(argv[4], &mod_out, &pin_out);
+    }
+    else {
+      return 1;
+    }
+
+    if(mod_in == 255 || pin_in == 255 || mod_out == 255 || pin_out == 255) {
+      return 1;
+    }
+
+    mcp_route(idx, op, mod_in, pin_in, mod_out, pin_out);
+  }
+  else {
+    return 1;
+  }
+
+  return 0;
 }
