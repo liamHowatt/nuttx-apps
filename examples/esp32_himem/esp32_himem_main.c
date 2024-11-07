@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <nuttx/himem/himem.h>
 
@@ -79,7 +80,8 @@ static int test_region(int fd, struct esp_himem_par *param)
 
   /* Set predefined parameters */
 
-  param->len = ESP_HIMEM_BLKSZ;
+  const size_t thing = ESP_HIMEM_BLKSZ * 2;
+  param->len = thing;
   param->range_offset = 0;
   param->flags = 0;
 
@@ -102,7 +104,7 @@ static int test_region(int fd, struct esp_himem_par *param)
       return -ENOMEM;
     }
 
-  for (i = 0; i < param->memfree; i += ESP_HIMEM_BLKSZ)
+  for (i = 0; i < thing; i += thing)
     {
       param->ptr = NULL;
       param->ram_offset = i;
@@ -117,7 +119,7 @@ static int test_region(int fd, struct esp_himem_par *param)
           goto free_rammem;
         }
 
-      fill_mem(param->ptr, ESP_HIMEM_BLKSZ);
+      fill_mem(param->ptr, thing);
 
       ret = ioctl(fd, HIMEMIOC_UNMAP, (unsigned long)((uintptr_t)param));
       if (ret < 0)
@@ -126,13 +128,15 @@ static int test_region(int fd, struct esp_himem_par *param)
           ret = -ENOMEM;
           goto free_rammem;
         }
+
+      puts("ba");
     }
 
   /* give the OS some time to do things so the task watchdog doesn't bark */
 
   usleep(1);
 
-  for (i = 0; i < param->memfree; i += ESP_HIMEM_BLKSZ)
+  for (i = 0; i < thing; i += thing)
     {
       param->ptr = NULL;
       param->ram_offset = i;
@@ -149,9 +153,9 @@ static int test_region(int fd, struct esp_himem_par *param)
           goto free_rammem;
         }
 
-      if (!check_mem(param->ptr, ESP_HIMEM_BLKSZ, i))
+      if (!check_mem(param->ptr, thing, i))
         {
-          printf("Error in block %d\n", i / ESP_HIMEM_BLKSZ);
+          printf("Error in block %d\n", i / thing);
           ret = -ENOMEM;
           goto free_rammem;
         }
@@ -163,6 +167,8 @@ static int test_region(int fd, struct esp_himem_par *param)
           ret = -ENOMEM;
           goto free_rammem;
         }
+
+      puts("ba2");
     }
 
   /* Free allocated memory */
@@ -230,5 +236,7 @@ int main(int argc, FAR char *argv[])
 
   test_region(fd, &param);
   printf("Done!\n");
+
+  return 0;
 }
 

@@ -54,3 +54,5 @@
 #define SESSION_CERTS
 #define HAVE_SNI
 #define SP_INT_BITS     8192
+#define NO_SESSION_CACHE
+#define NO_CLIENT_CACHE

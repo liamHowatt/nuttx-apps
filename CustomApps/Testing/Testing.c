@@ -6,27 +6,18 @@
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <time.h>
 
 
 int testing_main(int argc, char *argv[])
 {
-  int res;
-  sigset_t set;
+  while (1) {
+    struct timespec ts;
 
-  puts("This is the testing app");
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint32_t tick = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 
-  sigemptyset(&set);
-  sigaddset(&set, SIGUSR1);
-
-  res = sigprocmask(SIG_BLOCK, &set, NULL);
-  assert(res != -1);
-
-  while(1) {
-    puts("not waiting");
-    sleep(3);
-    puts("waiting");
-    res = sigwaitinfo(&set, NULL);
-    assert(res != -1);
+    printf("%d\n", tick);
   }
 
   return 0;

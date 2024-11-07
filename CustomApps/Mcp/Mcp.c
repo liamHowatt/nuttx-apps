@@ -31,6 +31,8 @@ struct ctx {
   uint8_t slot_idx;
 };
 
+static bool bootstrapped[2];
+
 static void gpio_write(void *ctx, enum mod_Gpio pin, bool value) {
   struct ctx *ctx2 = ctx;
 
@@ -54,9 +56,8 @@ static bool gpio_read(void *ctx, enum mod_Gpio pin) {
 static bool check_and_set_bootstrap(void *ctx) {
   struct ctx *ctx2 = ctx;
 
-  static bool boostrapped[2];
-  bool ret = !boostrapped[ctx2->slot_idx];
-  boostrapped[ctx2->slot_idx] = true;
+  bool ret = !bootstrapped[ctx2->slot_idx];
+  bootstrapped[ctx2->slot_idx] = true;
   return ret;
 }
 static void report_command_is_complete(void *ctx) {
@@ -339,6 +340,9 @@ int mcp_main(int argc, char **argv)
     }
 
     mcp_route(idx, op, mod_in, pin_in, mod_out, pin_out);
+  }
+  else if (strcmp(argv[1], "bootstrap") == 0) {
+    bootstrapped[idx] = true;
   }
   else {
     return 1;

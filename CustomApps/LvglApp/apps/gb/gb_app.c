@@ -6,6 +6,7 @@
 #include "red.h"
 #include <assert.h>
 #include <math.h>
+#include "../../mcp_platform.h"
 
 #define COLOR_R(h) ((h >> 16) & 0xff)
 #define COLOR_G(h) ((h >> 8) & 0xff)
@@ -19,7 +20,7 @@ typedef struct {
     uint8_t tmp_buf[160 * 144];
     uint16_t * draw_buf_pixel_0;
     uint8_t * ram_0;
-    uint8_t * rom_0;
+    const uint8_t * rom_0;
     uint32_t initial_tick;
     uint32_t frame_count;
 } ctx_t;
@@ -81,6 +82,8 @@ static const uint16_t palettes_x[1][36] = {
 
 static void tim_cb(lv_timer_t * tim);
 
+// extern bool mcp_platform_enter_key;
+
 static void step(ctx_t * ctx) {
     uint32_t ms_since_start = lv_tick_get() - ctx->initial_tick;
     const double d_ms_since_start = ms_since_start;
@@ -92,6 +95,8 @@ static void step(ctx_t * ctx) {
     ctx->frame_count = frames_should_have_run;
 
     if(frames_to_run) {
+        // ctx->gb.direct.joypad_bits.start = mcp_platform_enter_key;
+
         while(frames_to_run--) {
             gb_run_frame(&ctx->gb);
         }
@@ -155,14 +160,15 @@ void gb_app(void)
     lv_obj_t * canv = lv_canvas_create(scr);
     lv_canvas_set_buffer(canv, buf, 160, 144, LV_COLOR_FORMAT_RGB565);
     lv_obj_center(canv);
-    lv_image_set_scale(canv, 256 * 2);
+    // lv_image_set_scale(canv, 256 * 2);
     lv_image_set_antialias(canv, false);
+    lv_obj_add_state(canv, LV_STATE_FOCUSED);
 
     // for(uint32_t i = 0; i < 12; i++) {
     //     lv_canvas_set_palette(canv, indexes[i], palettes[0][i]);
     // }
 
-    ctx_t * ctx = malloc(sizeof(ctx_t));
+    ctx_t * ctx = calloc(1, sizeof(ctx_t));
     assert(ctx);
     ctx->canv = canv;
     ctx->draw_buf_pixel_0 = buf;
@@ -183,6 +189,8 @@ void gb_app(void)
     assert(ctx->ram_0);
 
     gb_init_lcd(&ctx->gb, draw_line);
+    ctx->gb.direct.interlace = false;
+    ctx->gb.direct.frame_skip = true;
 
     ctx->initial_tick = lv_tick_get();
     ctx->frame_count = 0;

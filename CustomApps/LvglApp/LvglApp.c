@@ -23,6 +23,19 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#ifdef NDEBUG
+  #error assert is used a lot in the apps. it is recommended to undef NDEBUG
+#endif
+
+
+
+
+
+#ifdef CONFIG_ARCH_SIM
+
+
+
 #include <unistd.h>
 #include <sys/boardctl.h>
 
@@ -33,14 +46,6 @@
 #endif
 
 #include "mcp_app.h"
-
-#ifndef CONFIG_ARCH_SIM
-  #error only the SIM is supported for now
-#endif
-
-#ifdef NDEBUG
-  #error assert is used a lot in the apps. it is recommended to undef NDEBUG
-#endif
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -168,3 +173,44 @@ int lvgl_app_main(int argc, FAR char *argv[])
 
   return 0;
 }
+
+
+
+
+#else
+
+
+#include <unistd.h>
+#include <time.h>
+
+#include <lvgl/lvgl.h>
+#include <lvgl/demos/lv_demos.h>
+#include "lvgl/examples/lv_examples.h"
+
+#include "mcp_app.h"
+
+
+static uint32_t millis(void)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  uint32_t tick = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+  return tick;
+}
+
+int lvgl_app_main(int argc, FAR char *argv[])
+{
+  assert(lv_is_initialized());
+  lv_tick_set_cb(millis);
+
+  // lv_example_anim_2();
+  mcp_app();
+
+  while(1) {
+    uint32_t idle = lv_timer_handler();
+    usleep(idle * 1000);
+  }
+}
+
+
+#endif

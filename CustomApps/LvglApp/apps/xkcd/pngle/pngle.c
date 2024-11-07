@@ -184,7 +184,7 @@ void pngle_reset(pngle_t *pngle)
 	tinfl_init(&pngle->inflator);
 }
 
-pngle_t *pngle_new()
+pngle_t *pngle_new(void)
 {
 	pngle_t *pngle = (pngle_t *)PNGLE_CALLOC(1, sizeof(pngle_t), "pngle_t");
 	if (!pngle) return NULL;

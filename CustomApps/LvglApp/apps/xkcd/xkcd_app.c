@@ -1,8 +1,9 @@
 #include "../../apps.h"
 
 #include "lvgl/lvgl.h"
+#include "netutils/cJSON.h"
+
 #include "pngle/pngle.h"
-#include "comic.h"
 
 #include <wolfssl/wolfcrypt/settings.h>
 #include <wolfssl/ssl.h>
@@ -20,69 +21,57 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <stddef.h>
 
-#define HOST "matrix.beeper.com"
+#ifdef NDEBUG
+  #error must be refactored to support NDEBUG. i.e. change `assert(foo())` to `x=foo();assert(x)`
+#endif
 
 typedef struct {
+    void * decoded;
     lv_obj_t * canv;
     bool done;
 } pstate_t;
 
 static const unsigned char ca_certs[] = R"(-----BEGIN CERTIFICATE-----
-MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
-TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
-cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
-WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
-ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
-MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
-h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
-0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
-A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
-T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
-B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
-B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
-KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
-OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
-jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
-qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
-rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
-HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
-hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
-ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
-3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
-NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
-ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
-TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
-jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
-oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
-4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
-mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
-emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+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
+WD9f
 -----END CERTIFICATE-----
 )";
-#define sizeof_ca_certs sizeof(ca_certs)
+#define CA_CERTS_LEN (sizeof(ca_certs) - 1)
 
-// static const unsigned char priv_key[] = R"(
-// )";
-// #define sizeof_priv_key sizeof(priv_key)
-
-// static const unsigned char cert[] = R"(
-// )";
-// #define sizeof_cert sizeof(cert)
+#define BUF_SZ 1000
+#define OK_RESP "HTTP/1.1 200 OK\r\n"
+#define OK_RESP_LEN (sizeof(OK_RESP) - 1)
 
 static void init_cb(pngle_t *dec, uint32_t w, uint32_t h) {
     pstate_t * ps = pngle_get_user_data(dec);
-    assert(lv_canvas_get_buf(ps->canv) == NULL);
-    void * buf = malloc(w * h * 4);
-    assert(buf);
-    lv_canvas_set_buffer(ps->canv, buf, w, h, LV_COLOR_FORMAT_ARGB8888);
+    ps->decoded = malloc(w * h * 2);
+    assert(ps->decoded);
+    lv_canvas_set_buffer(ps->canv, ps->decoded, w, h, LV_COLOR_FORMAT_RGB565);
 }
 
 static void draw_cb(pngle_t *dec, uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint8_t rgba[4]) {
     (void)w;
     (void)h;
     pstate_t * ps = pngle_get_user_data(dec);
-    assert(lv_canvas_get_buf(ps->canv) != NULL);
     lv_canvas_set_px(ps->canv, x, y, lv_color_make(rgba[0], rgba[1], rgba[2]), rgba[3]);
 }
 
@@ -91,223 +80,363 @@ static void done_cb(pngle_t *dec) {
     ps->done = true;
 }
 
-typedef struct {
-    WOLFSSL_CTX * ctx;
-    WOLFSSL * ssl;
-    int fd;
-    const char * err;
-} https_connect_ret_t;
-
-static void https_connect(https_connect_ret_t * ret, const char * domain)
+static void https_init(void)
 {
-    ret->err = "returned without setting error";
+    // assert(!wolfSSL_Debugging_ON());
+    assert(wolfSSL_Init() == SSL_SUCCESS);
+    // assert(!wolfSSL_Debugging_ON());
+}
 
-    int intret;
-
-    if(wolfSSL_Debugging_ON()) {
-        ret->err = "logging on, before init";
-        return;
-    }
-
-    // ssl initialization.
-    if(wolfSSL_Init() != SSL_SUCCESS)
-    {
-        ret->err = "wolfSSL_Init() error";
-        return;
-    }
-
-    if(wolfSSL_Debugging_ON()) {
-        ret->err = "logging on, after init";
-        return;
-    }
-
-    //init context
+static WOLFSSL_CTX * https_ctx(void)
+{
     WOLFSSL_CTX *ctx = wolfSSL_CTX_new(wolfTLSv1_2_client_method());
-    if (!ctx)
-    {
-        ret->err = "cannot create SSL context";
-        return;
-    }
+    assert(ctx);
 
-    /* Load client certificates into WOLFSSL_CTX */
-    if ((intret = wolfSSL_CTX_load_verify_buffer(ctx, ca_certs,
-            sizeof_ca_certs - 1, SSL_FILETYPE_PEM)) != WOLFSSL_SUCCESS) {
-        ret->err = "failed to load CA certs";
-        return;
-    }
+    assert(wolfSSL_CTX_load_verify_buffer(ctx, ca_certs,
+           CA_CERTS_LEN, SSL_FILETYPE_PEM) == WOLFSSL_SUCCESS);
 
-    // if ((intret = wolfSSL_CTX_use_PrivateKey_buffer(ctx,
-    //         priv_key,
-    //         sizeof_priv_key,
-    //         WOLFSSL_FILETYPE_PEM)) != WOLFSSL_SUCCESS) {
-    //     ret->err = "failed to load private key";
-    //     return;
-    // }
+    return ctx;
+}
 
-    // if ((intret = wolfSSL_CTX_use_certificate_buffer(ctx,
-    //         cert,
-    //         sizeof_cert,
-    //         WOLFSSL_FILETYPE_PEM)) != WOLFSSL_SUCCESS) {
-    //     ret->err = "failed to load certificate";
-    //     return;
-    // }
-
-    if (SSL_SUCCESS != wolfSSL_CTX_UseSNI(ctx, WOLFSSL_SNI_HOST_NAME, domain, strlen(domain)))
-    {
-        ret->err = "wolfSSL_CTX_UseSNI() failed";
-        return;
-    }
-
-    // wolfSSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, 0);
-
+static WOLFSSL * https_connect(WOLFSSL_CTX * ctx, const char * domain) {
     /* code taken from tcp_client_classic.c */
     struct addrinfo hints;
-
     memset(&hints, 0, sizeof(hints));
-
     struct addrinfo *peer;
     hints.ai_socktype = SOCK_STREAM;
+    assert(0 == getaddrinfo(domain, "443", &hints, &peer));
 
-    if (0 != (intret = getaddrinfo(domain, "443", &hints, &peer)))
-    {
-        ret->err = gai_strerror(intret);
-        return;
-    }
+    int fd = socket(peer->ai_family, peer->ai_socktype, peer->ai_protocol);
+    assert(fd >= 0);
 
-    // while(peer) {
-    //     char peer_addr[50];
-    //     char peer_protocol[50];
-    //     if(0 != getnameinfo(peer->ai_addr, peer->ai_addrlen, peer_addr, sizeof(peer_addr), peer_protocol, sizeof(peer_protocol), NI_NUMERICHOST))
-    //     {
-    //         ret->err = "getnameinfo() error";
-    //         return;
-    //     }
-
-    //     printf("%s\n", peer_addr);
-
-    //     peer = peer->ai_next;
-    // }
-    
-    // return;
-
-    //family socket_type protocol
-    int socket_fd = socket(peer->ai_family, peer->ai_socktype, peer->ai_protocol);
-
-    if (socket_fd < 0)
-    {
-        ret->err = "socket error";
-        return;
-    }
-
-    if (connect(socket_fd, peer->ai_addr, peer->ai_addrlen) < 0)
-    {
-        ret->err = "connect error";
-        return;
-    }
-
+    assert(0 == connect(fd, peer->ai_addr, peer->ai_addrlen));
     /* END */
+    freeaddrinfo(peer);
+    peer = NULL;
 
     WOLFSSL *ssl = wolfSSL_new(ctx);
-    if (!ssl)
-    {
-        ret->err = "SSL_new() failed";
-        return;
+    assert(ssl);
+
+    assert(SSL_SUCCESS == wolfSSL_UseSNI(ssl, WOLFSSL_SNI_HOST_NAME, domain, strlen(domain)));
+
+    assert(wolfSSL_set_fd(ssl, fd) == SSL_SUCCESS);
+
+    assert(wolfSSL_connect(ssl) == SSL_SUCCESS);
+
+    return ssl;
+}
+
+typedef struct {
+    char * headers;
+    size_t content_len;
+    uint8_t * content;
+    size_t content_buffered;
+} https_get_t;
+
+typedef struct {
+    WOLFSSL * ssl;
+    char * buf;
+    size_t cap;
+    size_t len;
+} https_get_more_t;
+
+static void https_get_more(https_get_more_t * more, size_t total_goal)
+{
+    if(!total_goal) {
+        total_goal = more->cap;
+        if(total_goal == more->len) {
+            total_goal += BUF_SZ;
+        }
     }
 
-    // if (!wolfSSL_set_tlsext_host_name(ssl, domain))
-    // {
-    //     ret->err = "SSL_set_tlsext_host_name() failed";
-    //     return;
+    while (more->len < total_goal) {
+        if(more->len == more->cap) {
+            more->cap += BUF_SZ;
+            more->buf = realloc(more->buf, more->cap);
+            assert(more->buf);
+        }
+
+        int n_read = wolfSSL_read(more->ssl, &more->buf[more->len], more->cap - more->len);
+        assert(n_read > 0);
+        more->len += n_read;
+    }
+}
+
+static void https_get(WOLFSSL * ssl, https_get_t * get, const char * domain_reminder, const char * path)
+{
+    char * req;
+    int req_len = asprintf(&req, "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n",
+                           path, domain_reminder);
+    assert(req_len != -1);
+
+    int n_written = wolfSSL_write(ssl, req, req_len);
+    assert(n_written == req_len);
+
+    free(req);
+    req = NULL;
+
+    https_get_more_t more = {
+        .ssl = ssl,
+        .buf = malloc(BUF_SZ),
+        .cap = BUF_SZ,
+        .len = 0
+    };
+    assert(more.buf);
+
+    https_get_more(&more, OK_RESP_LEN);
+    assert(0 == memcmp(OK_RESP, more.buf, OK_RESP_LEN));
+
+    size_t i = OK_RESP_LEN;
+    char * end;
+    while(NULL == (end = memmem(&more.buf[i], more.len - i, "\r\n\r\n", 4))) {
+        https_get_more(&more, 0);
+    }
+    size_t headers_len = end - more.buf;
+    end[2] = '\0';
+
+    char * cur = &more.buf[i - 2];
+    assert(NULL != strcasestr(cur, "\r\nconnection: keep-alive\r\n"));
+    const char * header = "\r\ncontent-length:";
+    cur = strcasestr(cur, header);
+    assert(cur);
+    cur += strlen(header);
+    unsigned int content_len;
+    assert(1 == sscanf(cur, "%u", &content_len));
+
+    end[2] = '\r';
+
+    get->headers = more.buf;
+    get->content_len = content_len;
+    get->content = (uint8_t *) end + 4;
+    get->content_buffered = more.len - headers_len - 4;
+}
+
+static void ssl_read_exactly(WOLFSSL * ssl, uint8_t * dst, size_t size)
+{
+    while(size) {
+        int n_read = wolfSSL_read(ssl, dst, size);
+        assert(n_read > 0);
+        size -= n_read;
+        dst += n_read;
+    }
+}
+
+typedef struct {
+    WOLFSSL * json_ssl;
+    WOLFSSL * img_ssl;
+    unsigned comic_on;
+    unsigned comic_max;
+    void * decoded;
+} load_comic_t;
+
+static void load_comic(load_comic_t * comic_ctx);
+
+static void left_btn_cb(lv_event_t * e)
+{
+    load_comic_t * comic_ctx = lv_event_get_user_data(e);
+    comic_ctx->comic_on--;
+    load_comic(comic_ctx);
+}
+
+static void right_btn_cb(lv_event_t * e)
+{
+    load_comic_t * comic_ctx = lv_event_get_user_data(e);
+    comic_ctx->comic_on++;
+    load_comic(comic_ctx);
+}
+
+static void load_comic(load_comic_t * comic_ctx)
+{
+    char * path;
+    void * free_me = NULL;
+    if (comic_ctx->comic_on > 0) {
+        assert(-1 != asprintf(&path, "%u/info.0.json", comic_ctx->comic_on));
+        free_me = path;
+    } else {
+        path = "info.0.json";
+    }
+
+    https_get_t get;
+    https_get(comic_ctx->json_ssl, &get, "xkcd.com", path);
+    free(free_me);
+
+    char * json = malloc(get.content_len + 1);
+    assert(json);
+    memcpy(json, get.content, get.content_buffered);
+    free(get.headers);
+    ssl_read_exactly(comic_ctx->json_ssl, (uint8_t *) json + get.content_buffered, get.content_len - get.content_buffered);
+    json[get.content_len] = '\0';
+    // printf("%s\n", json);
+
+    cJSON * cjson = cJSON_ParseWithOpts(json, NULL, 1);
+    assert(cjson);
+    free(json);
+
+    cJSON * item;
+    assert(cJSON_IsString((item = cJSON_GetObjectItemCaseSensitive(cjson, "img"))));
+    const char * img_url = item->valuestring;
+    assert(cJSON_IsString((item = cJSON_GetObjectItemCaseSensitive(cjson, "safe_title"))));
+    const char * title = item->valuestring;
+    assert(cJSON_IsString((item = cJSON_GetObjectItemCaseSensitive(cjson, "alt"))));
+    const char * alt = item->valuestring;
+    assert(cJSON_IsNumber((item = cJSON_GetObjectItemCaseSensitive(cjson, "num"))));
+    int num = item->valueint;
+
+    if(comic_ctx->comic_on <= 0) {
+        comic_ctx->comic_on = num;
+    } else {
+        assert(num == comic_ctx->comic_on);
+    }
+    if(comic_ctx->comic_max <= 0) {
+        comic_ctx->comic_max = num;
+    }
+
+    lv_obj_t * scr = lv_screen_active();
+    lv_obj_clean(scr);
+    free(comic_ctx->decoded);
+    lv_obj_set_style_pad_all(scr, 8, 0);
+    lv_group_add_obj(lv_group_get_default(), scr);
+    lv_gridnav_add(scr, LV_GRIDNAV_CTRL_SCROLL_FIRST);
+    lv_obj_set_layout(scr, LV_LAYOUT_GRID);
+    static const int32_t col_dsc[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
+    static const int32_t row_dsc[] = {LV_GRID_CONTENT,
+                                      LV_GRID_CONTENT,
+                                      LV_GRID_FR(1),
+                                      LV_GRID_TEMPLATE_LAST};
+    lv_obj_set_grid_dsc_array(scr, col_dsc, row_dsc);
+
+    lv_obj_t * title_label = lv_label_create(scr);
+    // lv_obj_set_width(title_label, LV_PCT(100));
+    lv_label_set_text(title_label, title);
+    lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_grid_cell(title_label, LV_GRID_ALIGN_STRETCH, 0, 4, LV_GRID_ALIGN_START, 0, 1);
+
+    lv_obj_t * left_btn = lv_button_create(scr);
+    lv_obj_add_event_cb(left_btn, left_btn_cb, LV_EVENT_CLICKED, comic_ctx);
+    lv_group_remove_obj(left_btn);
+    lv_obj_set_grid_cell(left_btn, LV_GRID_ALIGN_STRETCH, 1, 1, LV_GRID_ALIGN_START, 1, 1);
+    lv_obj_t * left_btn_label = lv_label_create(left_btn);
+    lv_obj_center(left_btn_label);
+    lv_label_set_text_static(left_btn_label, LV_SYMBOL_LEFT);
+
+    lv_obj_t * right_btn = lv_button_create(scr);
+    if(num == comic_ctx->comic_max) {
+        lv_obj_add_state(right_btn, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_event_cb(right_btn, right_btn_cb, LV_EVENT_CLICKED, comic_ctx);
+    }
+    lv_group_remove_obj(right_btn);
+    lv_obj_set_grid_cell(right_btn, LV_GRID_ALIGN_STRETCH, 2, 1, LV_GRID_ALIGN_START, 1, 1);
+    lv_obj_t * right_btn_label = lv_label_create(right_btn);
+    lv_obj_center(right_btn_label);
+    lv_label_set_text_static(right_btn_label, LV_SYMBOL_RIGHT);
+
+    lv_obj_t * canv_cont = lv_obj_create(scr);
+    lv_obj_set_style_bg_color(canv_cont, lv_palette_lighten(LV_PALETTE_BLUE, 5), LV_STATE_FOCUSED);
+    lv_obj_set_grid_cell(canv_cont, LV_GRID_ALIGN_STRETCH, 0, 4, LV_GRID_ALIGN_STRETCH, 2, 1);
+
+    lv_obj_t * canv = lv_canvas_create(canv_cont);
+    lv_group_remove_obj(canv);
+    // lv_obj_align(canv, LV_ALIGN_TOP_MID, 0, 0);
+
+    lv_obj_t * num_label = lv_label_create(scr);
+    lv_obj_set_style_text_font(num_label, &lv_font_montserrat_12, 0);
+    lv_label_set_text_fmt(num_label, "#%d", num);
+    lv_obj_set_grid_cell(num_label, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_END, 1, 1);
+
+
+    // lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
+    // lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // lv_obj_set_style_pad_top(scr, 16, 0);
+    // lv_obj_set_style_pad_bottom(scr, 16, 0);
+    // lv_obj_t * title_label = lv_label_create(scr);
+    // scroll_helper(title_label, LV_GRIDNAV_CTRL_NONE);
+    // lv_obj_set_width(title_label, LV_PCT(95));
+    // lv_label_set_text(title_label, title);
+    // lv_obj_set_style_text_font(title_label, &lv_font_montserrat_26, 0);
+    // lv_obj_t * btn_cont = lv_obj_create(scr);
+    // lv_obj_set_style_border_width(btn_cont, 0, 0);
+    // lv_obj_set_style_pad_all(btn_cont, 5, 0);
+    // lv_obj_set_style_bg_opa(btn_cont, LV_OPA_TRANSP, 0);
+    // lv_obj_set_size(btn_cont, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    // lv_obj_set_flex_flow(btn_cont, LV_FLEX_FLOW_ROW);
+    // lv_obj_t * left_btn = lv_button_create(btn_cont);
+    // scroll_helper(left_btn, LV_GRIDNAV_CTRL_NONE);
+    // lv_label_set_text_static(lv_label_create(left_btn), LV_SYMBOL_LEFT);
+    // lv_obj_add_event_cb(left_btn, left_btn_cb, LV_EVENT_CLICKED, comic_ctx);
+    // lv_obj_t * right_btn = lv_button_create(btn_cont);
+    // scroll_helper(right_btn, LV_GRIDNAV_CTRL_NONE);
+    // lv_label_set_text_static(lv_label_create(right_btn), LV_SYMBOL_RIGHT);
+    // if(num == comic_ctx->comic_max) {
+    //     lv_obj_add_state(right_btn, LV_STATE_DISABLED);
+    // } else {
+    //     lv_obj_add_event_cb(right_btn, right_btn_cb, LV_EVENT_CLICKED, comic_ctx);
     // }
+    // lv_obj_t * canv_cont = lv_obj_create(scr);
+    // scroll_helper(canv_cont, LV_GRIDNAV_CTRL_SCROLL_FIRST);
+    // lv_obj_set_size(canv_cont, LV_PCT(100), LV_SIZE_CONTENT);
+    // lv_obj_t * canv = lv_canvas_create(canv_cont);
+    // lv_obj_t * alt_label = lv_label_create(scr);
+    // scroll_helper(alt_label, LV_GRIDNAV_CTRL_NONE);
+    // lv_label_set_text(alt_label, alt);
+    // lv_obj_set_width(alt_label, LV_PCT(95));
+    // lv_label_set_text_fmt(lv_label_create(scr), "#%d", num);
 
-    if (wolfSSL_set_fd(ssl, socket_fd) != SSL_SUCCESS)
-    {
-        ret->err = "SSL_set_fd() failed";
-        return;
-    }
+    const char * img_url_expected_start = "https://imgs.xkcd.com/";
+    size_t img_url_expected_start_len = strlen(img_url_expected_start);
+    assert(0 == memcmp(img_url, img_url_expected_start, img_url_expected_start_len));
+    size_t img_url_len = strlen(img_url);
+    assert(img_url_len >= 4 && 0 == strcmp(img_url + (img_url_len - 4), ".png"));
+    const char * img_path = img_url + img_url_expected_start_len;
+    https_get(comic_ctx->img_ssl, &get, "imgs.xkcd.com", img_path);
 
-    if ((intret = wolfSSL_connect(ssl)) != SSL_SUCCESS)
-    {
-        int err = wolfSSL_get_error(ssl, intret);
-        char buf[100] = {0};
-        wolfSSL_ERR_error_string_n(err, buf, 99);
-        printf("%s\n", buf);
-        ret->err = "SSL_connect() failed";
-        return;
-    }
+    cJSON_Delete(cjson);
 
-    ret->ctx = ctx;
-    ret->ssl = ssl;
-    ret->fd = socket_fd;
-    ret->err = NULL;
+    uint8_t * raw_png = malloc(get.content_len);
+    assert(raw_png);
+
+    memcpy(raw_png, get.content, get.content_buffered);
+    free(get.headers);
+    ssl_read_exactly(comic_ctx->img_ssl, raw_png + get.content_buffered, get.content_len - get.content_buffered);
+
+    pstate_t ps = {
+        .decoded = NULL,
+        .canv = canv,
+        .done = false
+    };
+    pngle_t * dec = pngle_new();
+    assert(dec);
+    pngle_set_user_data(dec, &ps);
+    pngle_set_init_callback(dec, init_cb);
+    pngle_set_draw_callback(dec, draw_cb);
+    pngle_set_done_callback(dec, done_cb);
+
+    assert(!ps.done);
+    int n_fed = pngle_feed(dec, raw_png, get.content_len);
+    assert(n_fed == get.content_len);
+    assert(ps.done);
+
+    pngle_destroy(dec);
+
+    assert(ps.decoded);
+    comic_ctx->decoded = ps.decoded;
+
+    free(raw_png);
 }
 
 void xkcd_app(void)
 {
-    // pngle_t * dec = pngle_new();
-    // assert(dec);
+    https_init();
+    WOLFSSL_CTX * ctx = https_ctx();
 
-    // pstate_t * ps = malloc(sizeof(pstate_t));
-    // assert(ps);
-    // ps->canv = lv_canvas_create(lv_screen_active());
-    // ps->done = false;
+    static load_comic_t comic_ctx;
 
-    // pngle_set_user_data(dec, ps);
-    // pngle_set_init_callback(dec, init_cb);
-    // pngle_set_draw_callback(dec, draw_cb);
-    // pngle_set_done_callback(dec, done_cb);
+    comic_ctx.json_ssl = https_connect(ctx, "xkcd.com");
+    comic_ctx.img_ssl = https_connect(ctx, "imgs.xkcd.com");
+    comic_ctx.comic_on = 0;
+    comic_ctx.comic_max = 0;
+    comic_ctx.decoded = NULL;
 
-    // // for(size_t i = 0; i < sizeof(comic_bin) && !ps->done; i += 1024) {
-    // //     int ret = pngle_feed(dec, comic_bin + i, 1024);
-    // //     assert(ret == 1024);
-    // // }
-
-    // assert(!ps->done);
-    // int ret = pngle_feed(dec, comic_bin, sizeof(comic_bin));
-    // assert(ret == sizeof(comic_bin));
-    // assert(ps->done);
-
-    // pngle_destroy(dec);
-    // // void * buf = lv_canvas_get_buf(ps->canv);
-    // // lv_obj_delete(ps->canv);
-    // // free(buf);
-    // free(ps);
-
-    ///////////////////////////////////////////////
-
-    https_connect_ret_t conn_ret;
-    https_connect(&conn_ret, HOST);
-    printf("con ret err: %s\n", conn_ret.err ? conn_ret.err : "no error");
-
-    if (!conn_ret.err) {
-        static const char data[] = "GET  /_matrix/client/v3/login HTTP/1.1\r\nHost: " HOST "\r\n\r\n";
-        int intret = wolfSSL_write(conn_ret.ssl, data, sizeof(data) - 1);
-        if(intret != sizeof(data) - 1) {
-            printf("write failed");
-            return;
-        }
-        char buf[2000] = {0};
-        intret = wolfSSL_read(conn_ret.ssl, buf, sizeof(buf) - 1);
-        puts(buf);
-
-        // WOLFSSL_X509_CHAIN * chain = wolfSSL_get_peer_chain(conn_ret.ssl);
-        // if(!chain){
-        //     puts("chain issue");
-        //     return;
-        // }
-
-        // int chain_len = wolfSSL_get_chain_count(chain);
-        // printf("chain len: %d\n", chain_len);
-
-        // for(int i = 0; i < chain_len; i++) {
-        //     unsigned char buf[2000];
-        //     int outlen = -1;
-        //     wolfSSL_get_chain_cert_pem(chain, i, buf, 2000, &outlen);
-        //     if(outlen == -1) {
-        //         puts("get chain pem issue");
-        //         return;
-        //     }
-        //     printf("outlen: %d\n%.*s\n", outlen, outlen, buf);
-        // }
-    }
+    load_comic(&comic_ctx);
 }
