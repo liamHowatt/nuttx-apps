@@ -1,0 +1,7 @@
+ifneq ($(CONFIG_OLM),)
+CONFIGURED_APPS += $(APPDIR)/CustomApps/olm
+
+CFLAGS +=   ${INCDIR_PREFIX}$(APPDIR)/CustomApps/olm/olm/include
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/CustomApps/olm/olm/include
+
+endif

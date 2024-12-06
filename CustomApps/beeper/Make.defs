@@ -1,0 +1,6 @@
+ifneq ($(CONFIG_BEEPER),)
+CONFIGURED_APPS += $(APPDIR)/CustomApps/beeper
+
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/CustomApps/beeper/include
+
+endif

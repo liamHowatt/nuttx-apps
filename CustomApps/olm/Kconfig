@@ -1,0 +1,4 @@
+config OLM
+	bool "libolm Matrix cryptography library"
+	default n
+	depends on HAVE_CXX && UCLIBCXX

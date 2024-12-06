@@ -32,6 +32,8 @@
 #include <uv.h>
 #endif
 
+#include <beeper/beeper.h>
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -141,14 +143,15 @@ int main(int argc, FAR char *argv[])
       return 1;
     }
 
-  if (!lv_demos_create(&argv[1], argc - 1))
-    {
-      lv_demos_show_help();
+  // if (!lv_demos_create(&argv[1], argc - 1))
+  //   {
+  //     lv_demos_show_help();
 
-      /* we can add custom demos here */
+  //     /* we can add custom demos here */
 
-      goto demo_end;
-    }
+  //     goto demo_end;
+  //   }
+  beeper_start();
 
 #ifdef CONFIG_LV_USE_NUTTX_LIBUV
   lv_nuttx_uv_loop(&ui_loop, &result);

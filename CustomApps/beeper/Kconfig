@@ -1,0 +1,4 @@
+config BEEPER
+	bool "Beeper client"
+	default n
+	depends on OLM && GRAPHICS_LVGL
