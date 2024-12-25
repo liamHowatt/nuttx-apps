@@ -2,6 +2,9 @@
 
 #include "beeper_task.h"
 
-struct beeper_task_t {
-    char * upath;
-};
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <poll.h>
