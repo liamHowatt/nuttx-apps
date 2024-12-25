@@ -1,11 +1,11 @@
 #include <nuttx/config.h>
 
 /* Library */
-#define SINGLE_THREADED
+// #define SINGLE_THREADED
 #define WOLFSSL_SMALL_STACK
 
 /* Environment */
-#define NO_FILESYSTEM
+// #define NO_FILESYSTEM
 #define HAVE_STRINGS_H
 #define WOLF_C99
 
@@ -21,7 +21,7 @@
 #define NO_DSA
 
 /* RNG */
-#define WOLFSSL_GENSEED_FORTEST
+// #define WOLFSSL_GENSEED_FORTEST
 
 /* Applications */
 #define NO_MAIN_FUNCTION
@@ -29,7 +29,7 @@
 #define WOLFSSL_BENCHMARK_FIXED_UNITS_MB
 
 /* Development */
-/*#define DEBUG_WOLFSSL*/
+#define DEBUG_WOLFSSL
 
 #define HAVE_TLS_EXTENSIONS
 #define HAVE_SUPPORTED_CURVES
@@ -51,3 +51,8 @@
 #define HAVE_CHACHA
 #define HAVE_ENCRYPT_THEN_MAC
 #define NO_OLD_TLS
+#define SESSION_CERTS
+#define HAVE_SNI
+#define SP_INT_BITS     8192
+#define NO_SESSION_CACHE
+#define NO_CLIENT_CACHE

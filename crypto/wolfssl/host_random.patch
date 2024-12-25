@@ -1,0 +1,13 @@
+diff --git a/wolfcrypt/src/random.c b/wolfcrypt/src/random.c
+index 89c7411..b25a6a8 100644
+--- a/wolfcrypt/src/random.c
++++ b/wolfcrypt/src/random.c
+@@ -3998,7 +3998,7 @@ int wc_GenerateSeed(OS_Seed* os, byte* output, word32 sz)
+     #endif
+         {
+             /* may still have /dev/random */
+-            os->fd = open("/dev/random", O_RDONLY);
++            os->fd = open("/host/random", O_RDONLY);
+     #if defined(DEBUG_WOLFSSL)
+             WOLFSSL_MSG("opened /dev/random.");
+     #endif

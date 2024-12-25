@@ -4,9 +4,11 @@ CONFIGURED_APPS += $(APPDIR)/crypto/wolfssl
 CFLAGS += ${INCDIR_PREFIX}${APPDIR}/crypto/wolfssl
 CFLAGS += ${INCDIR_PREFIX}${APPDIR}/crypto/wolfssl/wolfssl
 CFLAGS += ${DEFINE_PREFIX}WOLFSSL_CONFIG_FILE="<crypto/wolfssl_config.h>"
+CFLAGS += ${DEFINE_PREFIX}WOLFSSL_USER_SETTINGS
 
 CXXFLAGS += ${INCDIR_PREFIX}${APPDIR}/crypto/wolfssl
 CXXFLAGS += ${INCDIR_PREFIX}${APPDIR}/crypto/wolfssl/wolfssl
 CXXFLAGS += ${DEFINE_PREFIX}WOLFSSL_CONFIG_FILE="<crypto/wolfssl_config.h>"
+CXXFLAGS += ${DEFINE_PREFIX}WOLFSSL_USER_SETTINGS
 
 endif
