@@ -8,3 +8,6 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <poll.h>
+#include <math.h>
+#include <time.h>
+#include <pthread.h>

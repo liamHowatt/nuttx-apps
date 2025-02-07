@@ -3,12 +3,6 @@
 #define LOGIN_PATH BEEPER_ROOT_PATH "login"
 #define TASK_PATH BEEPER_ROOT_PATH "task/"
 
-void task_event_cb(beeper_task_event_t e, void * event_data, void * user_data)
-{
-    bool * b = event_data;
-    printf("status: %d\n", (int) *b);
-}
-
 static void ta_event_cb(lv_event_t * e)
 {
     lv_obj_t * ta = lv_event_get_target_obj(e);
@@ -55,7 +49,7 @@ static void kb_ready_cb(lv_event_t * e)
     lv_obj_t * base_obj = lv_obj_get_parent(kb);
     beeper_ui_t * c = lv_obj_get_user_data(base_obj);
 
-    c->task = beeper_task_create(TASK_PATH, username, password, task_event_cb, NULL);
+    c->task = beeper_task_create(TASK_PATH, username, password, beeper_ui_task_event_cb, c);
 
     lv_obj_clean(base_obj);
     beeper_ui_verify(base_obj);
@@ -71,11 +65,10 @@ void beeper_ui_login(lv_obj_t * base_obj)
         char * password = strtok_r(NULL, "\n", &saveptr);
         assert(password != NULL);
 
-        printf("using existing username: %s, password: %s\n", username, password);
-
         beeper_ui_t * c = lv_obj_get_user_data(base_obj);
 
-        c->task = beeper_task_create(TASK_PATH, username, password, task_event_cb, NULL);
+        c->task = beeper_task_create(TASK_PATH, username, password, beeper_ui_task_event_cb, c);
+        free(existing_login);
 
         beeper_ui_verify(base_obj);
         return;
