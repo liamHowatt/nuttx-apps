@@ -1905,7 +1905,7 @@ static void vi_showtext(FAR struct vi_s *vi)
       pos = vi_nextline(vi, pos);
     }
 
-  if (pos == vi->textsize && vi->text[pos - 1] == '\n')
+  if (pos == vi->textsize && pos > 0 && vi->text[pos - 1] == '\n')
     {
       vi_setcursor(vi, row, 0);
       vi_clrtoeol(vi);
