@@ -1306,7 +1306,7 @@ static bool vi_savetext(FAR struct vi_s *vi, FAR const char *filename,
 
   fclose(stream);
 
-  len = snprintf(vi->scratch, sizeof(vi->scratch), "%dC written", nwritten);
+  len = snprintf(vi->scratch, sizeof(vi->scratch), "%zuC written", nwritten);
   vi_write(vi, vi->scratch, MIN(len, sizeof(vi->scratch)));
   return true;
 }
