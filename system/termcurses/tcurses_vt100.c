@@ -973,7 +973,7 @@ static int tcurses_vt100_getwinsize(FAR struct termcurses_s *dev,
   /* First try the TIOCGWINSZ ioctl */
 
   ret = ioctl(fd, TIOCGWINSZ, (unsigned long) winsz);
-  if (ret == OK)
+  if (ret == OK && winsz->ws_row && winsz->ws_col)
     {
       return OK;
     }
