@@ -36,6 +36,8 @@
 #ifndef __APPS_NETUTILS_PPPD_PPP_CONF_H
 #define __APPS_NETUTILS_PPPD_PPP_CONF_H
 
+#include <debug.h>
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
