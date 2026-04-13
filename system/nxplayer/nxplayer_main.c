@@ -793,6 +793,7 @@ int main(int argc, FAR char *argv[])
                 {
                   continue;
                 }
+              arg = cmd + strlen(cmd) + 1;
 
               /* Remove leading spaces from arg */
 
